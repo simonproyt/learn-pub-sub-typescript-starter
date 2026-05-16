@@ -4,8 +4,14 @@ import {
   printServerHelp,
   getInput,
 } from "../internal/gamelogic/gamelogic.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import {
+  ExchangePerilDirect,
+  ExchangePerilTopic,
+  GameLogSlug,
+  PauseKey,
+} from "../internal/routing/routing.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
+import { declareAndBind, SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
 
 async function main() {
   console.log("Starting Peril server...");
@@ -16,10 +22,27 @@ async function main() {
   console.log("Connected to RabbitMQ successfully.");
 
   const ch = await conn.createConfirmChannel();
+  await declareAndBind(
+    conn,
+    ExchangePerilTopic,
+    GameLogSlug,
+    `${GameLogSlug}.*`,
+    SimpleQueueType.Durable,
+  );
+  console.log(`Declared durable queue ${GameLogSlug} bound to ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
 
+  let shuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
     console.log(`Received ${signal}, shutting down...`);
-    await conn.close();
+    try {
+      await conn.close();
+    } catch (err) {
+      console.error("Error closing RabbitMQ connection:", err);
+    }
     process.exit(0);
   };
 
@@ -32,7 +55,11 @@ async function main() {
       continue;
     }
 
-    const command = words[0].toLowerCase();
+    const firstWord = words[0];
+    if (!firstWord) {
+      continue;
+    }
+    const command = firstWord.toLowerCase();
     if (command === "pause") {
       console.log("Sending pause message...");
       const pauseEvent: PlayingState = { isPaused: true };

@@ -1,5 +1,14 @@
 import amqp from "amqplib";
-import { clientWelcome } from "../internal/gamelogic/gamelogic.js";
+import { GameState } from "../internal/gamelogic/gamestate.js";
+import {
+  clientWelcome,
+  commandStatus,
+  getInput,
+  printClientHelp,
+  printQuit,
+} from "../internal/gamelogic/gamelogic.js";
+import { commandSpawn } from "../internal/gamelogic/spawn.js";
+import { commandMove } from "../internal/gamelogic/move.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
 import { declareAndBind, SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
 
@@ -21,16 +30,65 @@ async function main() {
   );
   console.log(`Declared and bound queue ${queueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
 
+  const gs = new GameState(username);
+
+  let shuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
     console.log(`Received ${signal}, shutting down...`);
-    await conn.close();
+    try {
+      await conn.close();
+    } catch (err) {
+      console.error("Error closing RabbitMQ connection:", err);
+    }
     process.exit(0);
   };
 
   process.on("SIGINT", () => void shutdown("SIGINT"));
   process.on("SIGTERM", () => void shutdown("SIGTERM"));
 
-  console.log("Client is waiting for shutdown signal...");
+  while (true) {
+    const words = await getInput("Client> ");
+    if (words.length === 0) {
+      continue;
+    }
+
+    const firstWord = words[0];
+    if (!firstWord) {
+      continue;
+    }
+    const command = firstWord.toLowerCase();
+    try {
+      if (command === "spawn") {
+        commandSpawn(gs, words);
+      } else if (command === "move") {
+        commandMove(gs, words);
+        console.log("Move command completed.");
+      } else if (command === "status") {
+        await commandStatus(gs);
+      } else if (command === "help") {
+        printClientHelp();
+      } else if (command === "spam") {
+        console.log("Spamming not allowed yet!");
+      } else if (command === "quit") {
+        printQuit();
+        break;
+      } else {
+        console.log(`Unrecognized command: ${command}`);
+      }
+    } catch (err) {
+      if (err instanceof Error) {
+        console.error(err.message);
+      } else {
+        console.error("Error:", err);
+      }
+    }
+  }
+
+  await conn.close();
 }
 
 main().catch((err) => {
