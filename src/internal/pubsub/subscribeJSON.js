@@ -8,13 +8,13 @@ export var AckType;
 })(AckType = AckType || (AckType = {}));
 export async function subscribeJSON(conn, exchange, queueName, key, queueType, handler, exchangeType = "direct") {
     const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType, exchangeType);
-    await ch.consume(queue.queue, (message) => {
+    await ch.consume(queue.queue, async (message) => {
         if (!message) {
             return;
         }
         try {
             const payload = JSON.parse(message.content.toString("utf8"));
-            const ackType = handler(payload);
+            const ackType = await handler(payload);
             if (ackType === AckType.Ack) {
                 console.log("Message processed successfully: ACK");
                 ch.ack(message);

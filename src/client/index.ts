@@ -9,10 +9,10 @@ import {
 } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { subscribeJSON, SimpleQueueType } from "../internal/pubsub/subscribeJSON.js";
-import { handlerPause, handlerMove } from "./handlers.js";
+import { handlerPause, handlerMove, handlerWar } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -35,17 +35,29 @@ async function main() {
   );
   console.log(`Declared and bound queue ${pauseQueueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
 
-  const moveQueueName = `army_moves.${username}`;
+  const moveQueueName = `${ArmyMovesPrefix}.${username}`;
   await subscribeJSON(
     conn,
     ExchangePerilTopic,
     moveQueueName,
-    "army_moves.*",
+    `${ArmyMovesPrefix}.*`,
     SimpleQueueType.Transient,
-    handlerMove(gs),
+    handlerMove(gs, await conn.createConfirmChannel()),
     "topic",
   );
-  console.log(`Declared and bound queue ${moveQueueName} to ${ExchangePerilTopic} with routing key army_moves.*.`);
+  console.log(`Declared and bound queue ${moveQueueName} to ${ExchangePerilTopic} with routing key ${ArmyMovesPrefix}.*.`);
+
+  const warQueueName = "war";
+  await subscribeJSON(
+    conn,
+    ExchangePerilTopic,
+    warQueueName,
+    `${WarRecognitionsPrefix}.*`,
+    SimpleQueueType.Durable,
+    handlerWar(gs),
+    "topic",
+  );
+  console.log(`Declared and bound queue ${warQueueName} to ${ExchangePerilTopic} with routing key ${WarRecognitionsPrefix}.*.`);
 
   const publishChannel = await conn.createConfirmChannel();
 
@@ -83,7 +95,7 @@ async function main() {
         commandSpawn(gs, words);
       } else if (command === "move") {
         const move = commandMove(gs, words);
-        const routingKey = `army_moves.${username}`;
+        const routingKey = `${ArmyMovesPrefix}.${username}`;
         await publishJSON(publishChannel, ExchangePerilTopic, routingKey, move);
         console.log(`Published move to ${routingKey}`);
       } else if (command === "status") {

@@ -3,10 +3,10 @@ import { GameState } from "../internal/gamelogic/gamestate.js";
 import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit, } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
 import { subscribeJSON, SimpleQueueType } from "../internal/pubsub/subscribeJSON.js";
-import { handlerPause, handlerMove } from "./handlers.js";
+import { handlerPause, handlerMove, handlerWar } from "./handlers.js";
 async function main() {
     console.log("Starting Peril client...");
     const username = await clientWelcome();
@@ -17,9 +17,12 @@ async function main() {
     const pauseQueueName = `pause.${username}`;
     await subscribeJSON(conn, ExchangePerilDirect, pauseQueueName, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
     console.log(`Declared and bound queue ${pauseQueueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
-    const moveQueueName = `army_moves.${username}`;
-    await subscribeJSON(conn, ExchangePerilTopic, moveQueueName, "army_moves.*", SimpleQueueType.Transient, handlerMove(gs), "topic");
-    console.log(`Declared and bound queue ${moveQueueName} to ${ExchangePerilTopic} with routing key army_moves.*.`);
+    const moveQueueName = `${ArmyMovesPrefix}.${username}`;
+    await subscribeJSON(conn, ExchangePerilTopic, moveQueueName, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gs, await conn.createConfirmChannel()), "topic");
+    console.log(`Declared and bound queue ${moveQueueName} to ${ExchangePerilTopic} with routing key ${ArmyMovesPrefix}.*.`);
+    const warQueueName = "war";
+    await subscribeJSON(conn, ExchangePerilTopic, warQueueName, `${WarRecognitionsPrefix}.*`, SimpleQueueType.Durable, handlerWar(gs), "topic");
+    console.log(`Declared and bound queue ${warQueueName} to ${ExchangePerilTopic} with routing key ${WarRecognitionsPrefix}.*.`);
     const publishChannel = await conn.createConfirmChannel();
     let shuttingDown = false;
     const shutdown = async (signal) => {
@@ -54,7 +57,7 @@ async function main() {
             }
             else if (command === "move") {
                 const move = commandMove(gs, words);
-                const routingKey = `army_moves.${username}`;
+                const routingKey = `${ArmyMovesPrefix}.${username}`;
                 await publishJSON(publishChannel, ExchangePerilTopic, routingKey, move);
                 console.log(`Published move to ${routingKey}`);
             }
