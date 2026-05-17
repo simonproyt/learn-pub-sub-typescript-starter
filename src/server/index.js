@@ -1,8 +1,11 @@
 import amqp from "amqplib";
+import { writeLog } from "../internal/gamelogic/logs.js";
 import { printServerHelp, getInput, } from "../internal/gamelogic/gamelogic.js";
 import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, } from "../internal/routing/routing.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
+import { subscribeMsgPack } from "../internal/pubsub/consume.js";
+import { AckType } from "../internal/pubsub/subscribeJSON.js";
+import { SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
 async function main() {
     console.log("Starting Peril server...");
     printServerHelp();
@@ -11,8 +14,19 @@ async function main() {
     console.log("Connected to RabbitMQ successfully.");
     const ch = await conn.createConfirmChannel();
     await ch.assertExchange(ExchangePerilDirect, "direct");
-    await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable, "topic");
-    console.log(`Declared durable queue ${GameLogSlug} bound to ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
+    await subscribeMsgPack(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable, async (gameLog) => {
+        try {
+            await writeLog(gameLog);
+            process.stdout.write("> ");
+            return AckType.Ack;
+        }
+        catch (err) {
+            console.error("Failed to write game log:", err);
+            process.stdout.write("> ");
+            return AckType.NackDiscard;
+        }
+    }, "topic");
+    console.log(`Subscribed to durable queue ${GameLogSlug} on ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
     let shuttingDown = false;
     const shutdown = async (signal) => {
         if (shuttingDown) {

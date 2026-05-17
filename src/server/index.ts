@@ -1,5 +1,7 @@
 import amqp from "amqplib";
 import type { PlayingState } from "../internal/gamelogic/gamestate.js";
+import type { GameLog } from "../internal/gamelogic/logs.js";
+import { writeLog } from "../internal/gamelogic/logs.js";
 import {
   printServerHelp,
   getInput,
@@ -11,6 +13,8 @@ import {
   PauseKey,
 } from "../internal/routing/routing.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
+import { subscribeMsgPack } from "../internal/pubsub/consume.js";
+import { AckType } from "../internal/pubsub/subscribeJSON.js";
 import { declareAndBind, SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
 
 async function main() {
@@ -23,15 +27,27 @@ async function main() {
 
   const ch = await conn.createConfirmChannel();
   await ch.assertExchange(ExchangePerilDirect, "direct");
-  await declareAndBind(
+
+  await subscribeMsgPack<GameLog>(
     conn,
     ExchangePerilTopic,
     GameLogSlug,
     `${GameLogSlug}.*`,
     SimpleQueueType.Durable,
+    async (gameLog) => {
+      try {
+        await writeLog(gameLog);
+        process.stdout.write("> ");
+        return AckType.Ack;
+      } catch (err) {
+        console.error("Failed to write game log:", err);
+        process.stdout.write("> ");
+        return AckType.NackDiscard;
+      }
+    },
     "topic",
   );
-  console.log(`Declared durable queue ${GameLogSlug} bound to ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
+  console.log(`Subscribed to durable queue ${GameLogSlug} on ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {
