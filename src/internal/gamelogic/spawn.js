@@ -1,5 +1,8 @@
 import { isValidLocation, isValidRank } from "./gamedata.js";
 export function commandSpawn(gs, words) {
+    if (gs.isPaused()) {
+        throw new Error("The game is paused, you cannot spawn units");
+    }
     if (words.length < 3) {
         throw new Error("usage: spawn <location> <rank>");
     }

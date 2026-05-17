@@ -3,8 +3,9 @@ export var SimpleQueueType;
     SimpleQueueType[SimpleQueueType["Durable"] = 0] = "Durable";
     SimpleQueueType[SimpleQueueType["Transient"] = 1] = "Transient";
 })(SimpleQueueType = SimpleQueueType || (SimpleQueueType = {}));
-export async function declareAndBind(conn, exchange, queueName, key, queueType) {
+export async function declareAndBind(conn, exchange, queueName, key, queueType, exchangeType = "direct") {
     const ch = await conn.createChannel();
+    await ch.assertExchange(exchange, exchangeType);
     const queue = await ch.assertQueue(queueName, {
         durable: queueType === SimpleQueueType.Durable,
         exclusive: queueType === SimpleQueueType.Transient,

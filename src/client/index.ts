@@ -10,7 +10,8 @@ import {
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/declareAndBind.js";
+import { subscribeJSON, SimpleQueueType } from "../internal/pubsub/subscribeJSON.js";
+import { handlerPause } from "./handlers.js";
 
 async function main() {
   console.log("Starting Peril client...");
@@ -20,17 +21,18 @@ async function main() {
   const conn = await amqp.connect(rabbitConnString);
   console.log("Connected to RabbitMQ successfully.");
 
+  const gs = new GameState(username);
+
   const queueName = `pause.${username}`;
-  await declareAndBind(
+  await subscribeJSON(
     conn,
     ExchangePerilDirect,
     queueName,
     PauseKey,
     SimpleQueueType.Transient,
+    handlerPause(gs),
   );
   console.log(`Declared and bound queue ${queueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
-
-  const gs = new GameState(username);
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

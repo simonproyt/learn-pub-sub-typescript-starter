@@ -11,8 +11,10 @@ export async function declareAndBind(
   queueName: string,
   key: string,
   queueType: SimpleQueueType,
+  exchangeType: "direct" | "topic" | "fanout" | "headers" = "direct",
 ): Promise<[amqp.Channel, amqp.Replies.AssertQueue]> {
   const ch = await conn.createChannel();
+  await ch.assertExchange(exchange, exchangeType);
   const queue = await ch.assertQueue(queueName, {
     durable: queueType === SimpleQueueType.Durable,
     exclusive: queueType === SimpleQueueType.Transient,

@@ -22,12 +22,14 @@ async function main() {
   console.log("Connected to RabbitMQ successfully.");
 
   const ch = await conn.createConfirmChannel();
+  await ch.assertExchange(ExchangePerilDirect, "direct");
   await declareAndBind(
     conn,
     ExchangePerilTopic,
     GameLogSlug,
     `${GameLogSlug}.*`,
     SimpleQueueType.Durable,
+    "topic",
   );
   console.log(`Declared durable queue ${GameLogSlug} bound to ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
 

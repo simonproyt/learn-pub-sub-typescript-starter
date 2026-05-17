@@ -10,7 +10,8 @@ async function main() {
     const conn = await amqp.connect(rabbitConnString);
     console.log("Connected to RabbitMQ successfully.");
     const ch = await conn.createConfirmChannel();
-    await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable);
+    await ch.assertExchange(ExchangePerilDirect, "direct");
+    await declareAndBind(conn, ExchangePerilTopic, GameLogSlug, `${GameLogSlug}.*`, SimpleQueueType.Durable, "topic");
     console.log(`Declared durable queue ${GameLogSlug} bound to ${ExchangePerilTopic} with routing key ${GameLogSlug}.*.`);
     let shuttingDown = false;
     const shutdown = async (signal) => {
