@@ -8,6 +8,7 @@ export var AckType;
 })(AckType = AckType || (AckType = {}));
 export async function subscribe(conn, exchange, queueName, routingKey, simpleQueueType, handler, deserializer, exchangeType = "direct") {
     const [ch, queue] = await declareAndBind(conn, exchange, queueName, routingKey, simpleQueueType, exchangeType);
+    await ch.prefetch(1);
     await ch.consume(queue.queue, async (message) => {
         if (!message) {
             return;

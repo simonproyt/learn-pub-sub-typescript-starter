@@ -1,6 +1,6 @@
 import amqp from "amqplib";
 import { GameState } from "../internal/gamelogic/gamestate.js";
-import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit, } from "../internal/gamelogic/gamelogic.js";
+import { clientWelcome, commandStatus, getInput, getMaliciousLog, printClientHelp, printQuit, } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
@@ -77,7 +77,26 @@ async function main() {
                 printClientHelp();
             }
             else if (command === "spam") {
-                console.log("Spamming not allowed yet!");
+                if (words.length < 2) {
+                    console.log("Usage: spam <count>");
+                    continue;
+                }
+                const count = Number(words[1]);
+                if (!Number.isInteger(count) || count <= 0) {
+                    console.log("Usage: spam <positive integer>");
+                    continue;
+                }
+                const routingKey = `${GameLogSlug}.${username}`;
+                for (let i = 0; i < count; i += 1) {
+                    const message = getMaliciousLog();
+                    const gameLog = {
+                        username,
+                        message,
+                        currentTime: new Date(),
+                    };
+                    await publishMsgPack(publishChannel, ExchangePerilTopic, routingKey, gameLog);
+                }
+                console.log(`Published ${count} malicious logs to ${routingKey}.`);
             }
             else if (command === "quit") {
                 printQuit();

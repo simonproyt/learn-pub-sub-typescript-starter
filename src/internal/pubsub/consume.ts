@@ -27,6 +27,8 @@ export async function subscribe<T>(
     exchangeType,
   );
 
+  await ch.prefetch(1);
+
   await ch.consume(queue.queue, async (message) => {
     if (!message) {
       return;

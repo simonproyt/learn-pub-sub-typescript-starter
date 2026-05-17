@@ -4,6 +4,7 @@ import {
   clientWelcome,
   commandStatus,
   getInput,
+  getMaliciousLog,
   printClientHelp,
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
@@ -118,7 +119,28 @@ async function main() {
       } else if (command === "help") {
         printClientHelp();
       } else if (command === "spam") {
-        console.log("Spamming not allowed yet!");
+        if (words.length < 2) {
+          console.log("Usage: spam <count>");
+          continue;
+        }
+
+        const count = Number(words[1]);
+        if (!Number.isInteger(count) || count <= 0) {
+          console.log("Usage: spam <positive integer>");
+          continue;
+        }
+
+        const routingKey = `${GameLogSlug}.${username}`;
+        for (let i = 0; i < count; i += 1) {
+          const message = getMaliciousLog();
+          const gameLog: GameLog = {
+            username,
+            message,
+            currentTime: new Date(),
+          };
+          await publishMsgPack(publishChannel, ExchangePerilTopic, routingKey, gameLog);
+        }
+        console.log(`Published ${count} malicious logs to ${routingKey}.`);
       } else if (command === "quit") {
         printQuit();
         break;
