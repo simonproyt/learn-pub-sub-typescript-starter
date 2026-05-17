@@ -1,5 +1,11 @@
 import { declareAndBind } from "./declareAndBind.js";
 export { SimpleQueueType } from "./declareAndBind.js";
+export var AckType;
+(function (AckType) {
+    AckType[AckType["Ack"] = 0] = "Ack";
+    AckType[AckType["NackRequeue"] = 1] = "NackRequeue";
+    AckType[AckType["NackDiscard"] = 2] = "NackDiscard";
+})(AckType = AckType || (AckType = {}));
 export async function subscribeJSON(conn, exchange, queueName, key, queueType, handler, exchangeType = "direct") {
     const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType, exchangeType);
     await ch.consume(queue.queue, (message) => {
@@ -8,12 +14,24 @@ export async function subscribeJSON(conn, exchange, queueName, key, queueType, h
         }
         try {
             const payload = JSON.parse(message.content.toString("utf8"));
-            handler(payload);
-            ch.ack(message);
+            const ackType = handler(payload);
+            if (ackType === AckType.Ack) {
+                console.log("Message processed successfully: ACK");
+                ch.ack(message);
+            }
+            else if (ackType === AckType.NackRequeue) {
+                console.log("Message processing failed: NACK requeue");
+                ch.nack(message, false, true);
+            }
+            else {
+                console.log("Message processing failed: NACK discard");
+                ch.nack(message, false, false);
+            }
         }
         catch (err) {
             console.error("Failed to process message:", err);
-            ch.ack(message);
+            console.log("Message processing failed: NACK discard");
+            ch.nack(message, false, false);
         }
     });
 }
