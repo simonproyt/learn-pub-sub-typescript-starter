@@ -1,7 +1,7 @@
 import { declareAndBind } from "./declareAndBind.js";
 export { SimpleQueueType } from "./declareAndBind.js";
-export async function subscribeJSON(conn, exchange, queueName, key, queueType, handler) {
-    const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType);
+export async function subscribeJSON(conn, exchange, queueName, key, queueType, handler, exchangeType = "direct") {
+    const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType, exchangeType);
     await ch.consume(queue.queue, (message) => {
         if (!message) {
             return;

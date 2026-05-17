@@ -10,8 +10,9 @@ export async function subscribeJSON<T>(
   key: string,
   queueType: SimpleQueueType,
   handler: (data: T) => void,
+  exchangeType: "direct" | "topic" | "fanout" | "headers" = "direct",
 ): Promise<void> {
-  const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType);
+  const [ch, queue] = await declareAndBind(conn, exchange, queueName, key, queueType, exchangeType);
 
   await ch.consume(queue.queue, (message) => {
     if (!message) {
