@@ -9,9 +9,10 @@ import {
 } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
-import { publishJSON } from "../internal/pubsub/publish.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
+import { publishJSON, publishMsgPack } from "../internal/pubsub/publish.js";
 import { subscribeJSON, SimpleQueueType } from "../internal/pubsub/subscribeJSON.js";
+import type { GameLog } from "../internal/gamelogic/logs.js";
 import { handlerPause, handlerMove, handlerWar } from "./handlers.js";
 
 async function main() {
@@ -35,6 +36,8 @@ async function main() {
   );
   console.log(`Declared and bound queue ${pauseQueueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
 
+  const publishChannel = await conn.createConfirmChannel();
+
   const moveQueueName = `${ArmyMovesPrefix}.${username}`;
   await subscribeJSON(
     conn,
@@ -54,12 +57,24 @@ async function main() {
     warQueueName,
     `${WarRecognitionsPrefix}.*`,
     SimpleQueueType.Durable,
-    handlerWar(gs),
+    handlerWar(gs, publishGameLog),
     "topic",
   );
   console.log(`Declared and bound queue ${warQueueName} to ${ExchangePerilTopic} with routing key ${WarRecognitionsPrefix}.*.`);
 
-  const publishChannel = await conn.createConfirmChannel();
+  async function publishGameLog(
+    username: string,
+    message: string,
+  ): Promise<void> {
+    const gameLog: GameLog = {
+      username,
+      message,
+      currentTime: new Date(),
+    };
+
+    const routingKey = `${GameLogSlug}.${username}`;
+    await publishMsgPack(publishChannel, ExchangePerilTopic, routingKey, gameLog);
+  }
 
   let shuttingDown = false;
   const shutdown = async (signal: string) => {

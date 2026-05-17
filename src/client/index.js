@@ -3,8 +3,8 @@ import { GameState } from "../internal/gamelogic/gamestate.js";
 import { clientWelcome, commandStatus, getInput, printClientHelp, printQuit, } from "../internal/gamelogic/gamelogic.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
-import { publishJSON } from "../internal/pubsub/publish.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
+import { publishJSON, publishMsgPack } from "../internal/pubsub/publish.js";
 import { subscribeJSON, SimpleQueueType } from "../internal/pubsub/subscribeJSON.js";
 import { handlerPause, handlerMove, handlerWar } from "./handlers.js";
 async function main() {
@@ -17,13 +17,22 @@ async function main() {
     const pauseQueueName = `pause.${username}`;
     await subscribeJSON(conn, ExchangePerilDirect, pauseQueueName, PauseKey, SimpleQueueType.Transient, handlerPause(gs));
     console.log(`Declared and bound queue ${pauseQueueName} to ${ExchangePerilDirect} with routing key ${PauseKey}.`);
+    const publishChannel = await conn.createConfirmChannel();
     const moveQueueName = `${ArmyMovesPrefix}.${username}`;
     await subscribeJSON(conn, ExchangePerilTopic, moveQueueName, `${ArmyMovesPrefix}.*`, SimpleQueueType.Transient, handlerMove(gs, await conn.createConfirmChannel()), "topic");
     console.log(`Declared and bound queue ${moveQueueName} to ${ExchangePerilTopic} with routing key ${ArmyMovesPrefix}.*.`);
     const warQueueName = "war";
-    await subscribeJSON(conn, ExchangePerilTopic, warQueueName, `${WarRecognitionsPrefix}.*`, SimpleQueueType.Durable, handlerWar(gs), "topic");
+    await subscribeJSON(conn, ExchangePerilTopic, warQueueName, `${WarRecognitionsPrefix}.*`, SimpleQueueType.Durable, handlerWar(gs, publishGameLog), "topic");
     console.log(`Declared and bound queue ${warQueueName} to ${ExchangePerilTopic} with routing key ${WarRecognitionsPrefix}.*.`);
-    const publishChannel = await conn.createConfirmChannel();
+    async function publishGameLog(username, message) {
+        const gameLog = {
+            username,
+            message,
+            currentTime: new Date(),
+        };
+        const routingKey = `${GameLogSlug}.${username}`;
+        await publishMsgPack(publishChannel, ExchangePerilTopic, routingKey, gameLog);
+    }
     let shuttingDown = false;
     const shutdown = async (signal) => {
         if (shuttingDown) {

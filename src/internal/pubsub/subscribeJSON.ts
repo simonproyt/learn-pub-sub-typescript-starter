@@ -29,13 +29,10 @@ export async function subscribeJSON<T>(
       const payload = JSON.parse(message.content.toString("utf8")) as T;
       const ackType = await handler(payload);
       if (ackType === AckType.Ack) {
-        console.log("Message processed successfully: ACK");
         ch.ack(message);
       } else if (ackType === AckType.NackRequeue) {
-        console.log("Message processing failed: NACK requeue");
         ch.nack(message, false, true);
       } else {
-        console.log("Message processing failed: NACK discard");
         ch.nack(message, false, false);
       }
     } catch (err) {

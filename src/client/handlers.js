@@ -39,22 +39,38 @@ export function handlerMove(gs, publishChannel) {
         return AckType.NackDiscard;
     };
 }
-export function handlerWar(gs) {
+export function handlerWar(gs, publishGameLog) {
     return async (rw) => {
         const result = handleWar(gs, rw);
-        process.stdout.write("> ");
+        let logMessage = null;
         switch (result.result) {
             case WarOutcome.NotInvolved:
+                process.stdout.write("> ");
                 return AckType.NackRequeue;
             case WarOutcome.NoUnits:
+                process.stdout.write("> ");
                 return AckType.NackDiscard;
             case WarOutcome.OpponentWon:
             case WarOutcome.YouWon:
+                logMessage = `${result.winner} won a war against ${result.loser}`;
+                break;
             case WarOutcome.Draw:
-                return AckType.Ack;
+                logMessage = `A war between ${result.attacker} and ${result.defender} resulted in a draw`;
+                break;
             default:
                 console.error("Unknown war outcome:", result);
+                process.stdout.write("> ");
                 return AckType.NackDiscard;
+        }
+        try {
+            await publishGameLog(rw.attacker.username, logMessage);
+            process.stdout.write("> ");
+            return AckType.Ack;
+        }
+        catch (err) {
+            console.error("Failed to publish war log, requeueing:", err);
+            process.stdout.write("> ");
+            return AckType.NackRequeue;
         }
     };
 }
